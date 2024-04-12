@@ -1,0 +1,7 @@
+".\Objects\main.obj",
+".\Objects\DHT11.obj",
+".\Objects\lcd.obj",
+".\Objects\public.obj",
+".\Objects\usart.obj" 
+TO ".\Objects\project" 
+PRINT(".\Listings\project.m51") RAMSIZE(256) 

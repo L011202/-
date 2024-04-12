@@ -1,0 +1,526 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE ..\file\main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings
+                    -\main.lst) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include "usart.h"                                      //引用自定义串口头文件
+   2          //#include "stdio.h"                            //头文件可以直接定义在usart.h中引用
+   3          //#include "stdlib.h"                           //头文件可以直接定义在usart.h中引用
+   4          #include "string.h"                                     
+   5          #include "math.h"
+   6          #include "lcd.h"                                        //lcd自定义头文件
+   7          #include "DHT11.h"                                      //温湿度传感器DHT11自定义头文件
+   8          
+   9          
+  10          
+  11          code char  CWJAP_buff[35] = "AT+CWJAP=\"liang\",\"liangliang\"\r\n";  //连接WiFi，其中WiFi名称和密码要设置
+             -为默认的
+  12          code char  CWMODE_buff[15] = "AT+CWMODE=1\r\n";  //设置WiFi模块为STA模式
+  13          code char  CIPSTART_API_buff[] = "AT+CIPSTART=1,\"TCP\",\"api.seniverse.com\",80\r\n";  //建立TCP连接
+  14          //code char  CIPSTART_APP_buff[] = "AT+CIPSTART=2,\"TCP\",\"192.168.43.1\",8899\r\n";  //建立TCP连接，端口
+             -号为8899
+  15          code char  CIPSTART_APP_buff[] = "AT+CIPSTART=2,\"TCP\",\"192.168.137.57\",8899\r\n";  //建立TCP连接，端口
+             -号为8899
+  16          code char  CIPSTART_buff[] = "AT+CIPSTART=1,\"TCP\",\"api.seniverse.com\",80\r\n";  //建立TCP连接
+  17          code char  CIPSEND_buff[] = "AT+CIPSEND\r\n";
+  18          //AT+CIPSEND=%d,%d
+  19          code char  CIPSEND_API_buff[] = "AT+CIPSEND=1,128\r\n";
+  20          // code char  CIPSEND_API_buff[] = "AT+CIPSEND=1,128";
+  21          code char  GET_API_buff[] = "GET https://api.seniverse.com/v3/weather/daily.json?key=SWaCmu3LmzT_kS21g&loc
+             -ation=zhengzhou&language=en&unit=c&start=0&days=1\r\n";
+  22          //zh-Hans
+  23          sbit  BEEP  =  P2^3;   //蜂鸣器
+  24          sbit  LED  =  P1^0;  //led
+  25          sbit  MQ2_IN  =  P2^1;  //led
+  26          
+  27          
+  28          extern uchar rec_dat[10];
+  29          
+  30          
+  31          //void delay1ms(unsigned int c)   //误差 0us
+  32          //{
+  33          //    unsigned int a,b;
+  34          //      for (; c>0; c--)
+  35          //      {
+  36          //               for (b=199;b>0;b--)
+  37          //               {
+  38          //                      for(a=1;a>0;a--);
+  39          //               }      
+  40          //      }       
+  41          //}
+  42          
+  43           unsigned char beek_flag=0;
+  44           unsigned char sys_cnt=0;
+  45           idata  char  str_buff[35]="\0";
+  46           idata char  send_len_buff[25] = "AT+CIPSEND=1,128";
+  47           
+  48           idata  char  date_buff[12]="\0";
+  49           idata  char  temp_high_buff[10]="\0";  
+  50           idata  char  temp_low_buff[10]="\0";
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 2   
+
+  51           idata  char  text_day[20]="\0";         
+  52           idata  char  text_night[20]="\0";       
+  53           idata  char  wind_speed[20]="\0";       
+  54           idata  char  wind_scale[20]="\0";       
+  55           idata  char  rainfall[20]="\0"; 
+  56           
+  57          void delayms(unsigned int xms)   //延时函数
+  58          {
+  59   1              unsigned int x;
+  60   1              unsigned char y;
+  61   1              for(x = xms; x > 0; x--)
+  62   1                      for(y = 124; y>0; y--);//11.0592MHz: 114  //12MHz: 124
+  63   1      }
+  64          
+  65          
+  66           unsigned char resvie_usart_dat;//[15]="\0",resvie_usart_len=0,save_flag=0;
+  67           xdata unsigned char    resvie_usart_dat_buff[500]="\0";//="[{\"date\":\"2024-04-08\",\"text_day\":\"Cloudy\"
+             -,\"code_day\":\"4\",\"text_night\":\"Cloudy\",\"code_night\":\"4\",\"high\":\"26\",\"low\":\"12\",\"rainfall\":\"0.00\",
+             -\"precip\":\"0.00\",\"wind_direction\":\"E\",\"wind_direction_degree\":\"90\",\"wind_speed\":\"8.4\",\"wind_scale\":\"2\
+             -",\"humidity\":\"65\"}],\"last_update\":\"2024-04-08T08:00:00+08:00\"}]}1,CLOSED";
+  68          
+  69           unsigned short int     resvie_usart_dat_buff_len=0;
+  70           unsigned char  resvie_usart_save_dat_flag=0;
+  71          
+  72          void dat_resive_fun(void)
+  73          {
+  74   1               unsigned char i=0;
+  75   1              char *str_p;
+  76   1              str_p = strstr(resvie_usart_dat_buff,"date");
+  77   1              memcpy(date_buff, str_p+7, 10);    for(i=0;i<10;i++){if(date_buff[i]=='"')date_buff[i]=0;  }
+  78   1              
+  79   1              str_p = strstr(resvie_usart_dat_buff,"high");
+  80   1              memcpy(temp_high_buff, str_p+7, 3);      for(i=0;i<3;i++){if(temp_high_buff[i]=='"')temp_high_buff[i]=0;  }
+  81   1              
+  82   1              str_p = strstr(resvie_usart_dat_buff,"low");
+  83   1              memcpy(temp_low_buff, str_p+6, 3);              for(i=0;i<3;i++){if(temp_low_buff[i]=='"')temp_low_buff[i]=0;  }
+  84   1              
+  85   1              str_p = strstr(resvie_usart_dat_buff,"text_day");
+  86   1              memcpy(text_day, str_p+11, 10);         for(i=0;i<10;i++){if(text_day[i]=='"')text_day[i]=0;  } 
+  87   1              
+  88   1              str_p = strstr(resvie_usart_dat_buff,"text_night");
+  89   1              memcpy(text_night, str_p+13, 10);               for(i=0;i<10;i++){if(text_night[i]=='"')text_night[i]=0;  }             
+  90   1              
+  91   1              str_p = strstr(resvie_usart_dat_buff,"wind_speed");
+  92   1              memcpy(wind_speed, str_p+13, 5);                for(i=0;i<5;i++){if(wind_speed[i]=='"')wind_speed[i]=0;  }
+  93   1              
+  94   1              str_p = strstr(resvie_usart_dat_buff,"wind_scale");
+  95   1              memcpy(wind_scale, str_p+13, 5);                for(i=0;i<5;i++){if(wind_scale[i]=='"')wind_scale[i]=0;  }              
+  96   1              
+  97   1              str_p = strstr(resvie_usart_dat_buff,"rainfall");
+  98   1              memcpy(rainfall, str_p+11, 5);          for(i=0;i<5;i++){if(wind_scale[i]=='"')wind_scale[i]=0;  }              
+  99   1      }
+ 100          
+ 101          
+ 102          void re_tcp_conect(void)
+ 103          {
+ 104   1              unsigned char sys_fun_cnt=0;
+ 105   1                      resvie_usart_dat_buff_len=0; 
+ 106   1              Send_Str(CIPSTART_APP_buff);   //链接手机app调试助手
+ 107   1              delayms(2000);
+ 108   1              while(strstr(resvie_usart_dat_buff,"OK")==0 && sys_fun_cnt<5){ delayms(2000);    sys_fun_cnt++;}        
+ 109   1              memset(resvie_usart_dat_buff,0,500);            
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 3   
+
+ 110   1              delayms(2000);  
+ 111   1      
+ 112   1              
+ 113   1              sys_fun_cnt=0;
+ 114   1              memset(resvie_usart_dat_buff,0,500);
+ 115   1              resvie_usart_dat_buff_len=0;
+ 116   1              Send_Str(CWMODE_buff);           // 设置为sta模式
+ 117   1              delayms(2000);
+ 118   1              while(strstr(resvie_usart_dat_buff,"OK")==0 &&sys_fun_cnt<5){ delayms(2000);     sys_fun_cnt++;}        
+ 119   1              memset(resvie_usart_dat_buff,0,500);
+ 120   1                      delayms(3000);          
+ 121   1      }
+ 122          
+ 123          void send_API(void)
+ 124          {
+ 125   1              //      send_len_buff[20] = "AT+CIPSEND=2,128";
+ 126   1              
+ 127   1              if(beek_flag)
+ 128   1              {
+ 129   2                      memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 130   2                      sprintf(str_buff,"警报!!!!!!!!!!!!!!!!!!!! ");//rec_dat
+ 131   2                      sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 132   2                      Send_Str(send_len_buff);
+ 133   2                      resvie_usart_dat_buff_len=0;    delayms(1500);  
+ 134   2                      memset(resvie_usart_dat_buff,0,500);
+ 135   2                      Send_Str(str_buff);  delayms(1000);             
+ 136   2                      if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();       
+ 137   2              }
+ 138   1              
+ 139   1              memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 140   1              sprintf(str_buff,"Temp,Humi:%s ",rec_dat);//rec_dat
+ 141   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 142   1          Send_Str(send_len_buff);
+ 143   1              resvie_usart_dat_buff_len=0;    delayms(1500);  
+ 144   1              memset(resvie_usart_dat_buff,0,500);
+ 145   1          Send_Str(str_buff);  delayms(1000);         
+ 146   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 147   1              
+ 148   1              memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 149   1              sprintf(str_buff,"date:%s",date_buff);
+ 150   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 151   1          Send_Str(send_len_buff);
+ 152   1              resvie_usart_dat_buff_len=0;    delayms(1500);  
+ 153   1              memset(resvie_usart_dat_buff,0,500);
+ 154   1          Send_Str(str_buff);  delayms(1000);
+ 155   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 156   1              //        Send_Str("\r\n");
+ 157   1      
+ 158   1              memset(str_buff,0,35); memset(send_len_buff,0,25);      
+ 159   1              sprintf(str_buff,"temp:%s~%s",temp_low_buff,temp_high_buff);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 160   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 161   1          Send_Str(send_len_buff);    
+ 162   1              resvie_usart_dat_buff_len=0;    delayms(1500);  
+ 163   1              memset(resvie_usart_dat_buff,0,500);
+ 164   1          Send_Str(str_buff); delayms(1000);
+ 165   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 166   1              //        Send_Str("\r\n");
+ 167   1      
+ 168   1              memset(str_buff,0,35); memset(send_len_buff,0,25);      
+ 169   1              sprintf(str_buff,"text_day:%s",text_day);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 170   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 171   1          Send_Str(send_len_buff);
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 4   
+
+ 172   1              resvie_usart_dat_buff_len=0;    delayms(1500);          
+ 173   1              memset(resvie_usart_dat_buff,0,500);
+ 174   1          Send_Str(str_buff);delayms(1000);
+ 175   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 176   1              //        Send_Str("\r\n");
+ 177   1      
+ 178   1              memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 179   1              sprintf(str_buff,"text_night:%s",text_night);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 180   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 181   1          Send_Str(send_len_buff);
+ 182   1              resvie_usart_dat_buff_len=0;    delayms(1500);  
+ 183   1              memset(resvie_usart_dat_buff,0,500);
+ 184   1          Send_Str(str_buff);delayms(1000);
+ 185   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 186   1              //        Send_Str("\r\n");
+ 187   1      
+ 188   1              memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 189   1              sprintf(str_buff,"wind_sped:%sm/2",wind_speed);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 190   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 191   1          Send_Str(send_len_buff);    
+ 192   1              resvie_usart_dat_buff_len=0;    delayms(1500);
+ 193   1              memset(resvie_usart_dat_buff,0,500);    
+ 194   1          Send_Str(str_buff); delayms(1000);
+ 195   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 196   1              //        Send_Str("\r\n");
+ 197   1              
+ 198   1              memset(str_buff,0,35); memset(send_len_buff,0,25);
+ 199   1              sprintf(str_buff,"wind_scale:%s  ",wind_scale);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 200   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)));
+ 201   1          Send_Str(send_len_buff);    
+ 202   1              resvie_usart_dat_buff_len=0;    delayms(1500);
+ 203   1              memset(resvie_usart_dat_buff,0,500);    
+ 204   1          Send_Str(str_buff);delayms(1000);
+ 205   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 206   1              //        Send_Str("\r\n");
+ 207   1      
+ 208   1              memset(str_buff,0,35); 
+ 209   1              memset(send_len_buff,0,25);
+ 210   1              sprintf(str_buff,"rainfall:%s",rainfall);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 211   1              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)+2));
+ 212   1          Send_Str(send_len_buff);    
+ 213   1              resvie_usart_dat_buff_len=0;    
+ 214   1              delayms(1500);  
+ 215   1              if(strstr(resvie_usart_dat_buff,"OK")==0)re_tcp_conect();       
+ 216   1              memset(resvie_usart_dat_buff,0,500);    
+ 217   1          Send_Str(str_buff);
+ 218   1              Send_Str("\r\n");       
+ 219   1              delayms(1000);
+ 220   1              if(strstr(resvie_usart_dat_buff,"ERROR"))re_tcp_conect();
+ 221   1      }
+ 222          
+ 223          void show_API(unsigned char chanl)
+ 224          {
+ 225   1              //       unsigned char i=0;
+ 226   1              //      char *str_p;
+ 227   1              LCD_display_str(0x40,"               ");
+ 228   1              if(chanl==0)
+ 229   1              {
+ 230   2                      sprintf(str_buff,"date:%s      ",date_buff);
+ 231   2                      LCD_display_str(0x40,str_buff);
+ 232   2              }
+ 233   1              else if(chanl==1)
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 5   
+
+ 234   1              {
+ 235   2                      sprintf(str_buff,"temp:%s~%s",temp_low_buff,temp_high_buff);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 236   2                      LCD_display_str(0x40,str_buff);
+ 237   2              }       
+ 238   1              else if(chanl==2)
+ 239   1              {
+ 240   2                      sprintf(str_buff,"text_day:%s  ",text_day);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 241   2                      LCD_display_str(0x40,str_buff);
+ 242   2              }       
+ 243   1              else if(chanl==3)
+ 244   1              {
+ 245   2                      sprintf(str_buff,"text_night:%s  ",text_night);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 246   2                      LCD_display_str(0x40,str_buff);
+ 247   2              }               
+ 248   1              else if(chanl==4)
+ 249   1              {
+ 250   2                      sprintf(str_buff,"wind_sped:%sm/s ",wind_speed);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 251   2                      LCD_display_str(0x40,str_buff);
+ 252   2              }       
+ 253   1              else if(chanl==5)
+ 254   1              {
+ 255   2                      sprintf(str_buff,"wind_scale:%s  ",wind_scale);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 256   2                      LCD_display_str(0x40,str_buff);
+ 257   2              }               
+ 258   1              else if(chanl==6)
+ 259   1              {
+ 260   2                      sprintf(str_buff,"rainfall:%s  ",rainfall);//set_dis_down,csb1_dis,set:%.0fcm, 
+ 261   2                      LCD_display_str(0x40,str_buff);
+ 262   2              }                       
+ 263   1      }
+ 264          
+ 265          unsigned char resive_zero_flag=0;
+ 266          void UART() interrupt 4
+ 267          {       
+ 268   1              if(RI == 1)   //串口接收到数据
+ 269   1              {
+ 270   2                      RI = 0;   sys_cnt=5;     
+ 271   2                      resvie_usart_dat = SBUF;  //
+ 272   2              
+ 273   2                      //              if(resvie_usart_dat == 'c')     { //解析指令，得到手机发来的设置下限
+ 274   2                      //                      resvie_usart_save_dat_flag=0; 
+ 275   2                      if(resvie_usart_dat_buff_len>210 && resive_zero_flag==0) {resvie_usart_dat_buff_len=0; resive_zero_flag=
+             -1;}
+ 276   2                      //              else resvie_usart_dat_buff_len=0;
+ 277   2                      
+ 278   2                      if(resvie_usart_dat_buff_len<500) resvie_usart_dat_buff[resvie_usart_dat_buff_len++]=resvie_usart_dat;
+ 279   2                      else resvie_usart_dat_buff_len=0;
+ 280   2                      //                      set_dis_down = (float)atoi(resvie_usart_dat_buff);
+ 281   2                      //      resvie_usart_dat_buff_len =0;                   
+ 282   2                      //              }
+ 283   2                      //              if(resvie_usart_save_dat_flag)
+ 284   2                      //              {
+ 285   2                      //              if(resvie_usart_dat_buff_len<5)resvie_usart_dat_buff[resvie_usart_dat_buff_len++]        = resvie_usart_
+             -dat;
+ 286   2                      //              }       
+ 287   2                      //if(resvie_usart_dat == ':')   { resvie_usart_save_dat_flag=1;resvie_usart_dat_buff_len=0; }   //SET:25cm
+ 288   2      
+ 289   2              }       
+ 290   1      }
+ 291          
+ 292          void init_time0(void)
+ 293          {
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 6   
+
+ 294   1                      TMOD = 0x01;//开启定时器0，16位定时模式
+ 295   1      //              TH0 = 0x3C;  //(65536 - 50000) / 256;  //50ms
+ 296   1      //              TL0 = 0xB0;  //(65536 - 50000) % 256;;
+ 297   1      //              TH0 = 0xBE;  //(65536 - 50000) / 256;  //20ms
+ 298   1      //              TL0 = 0xE0;  //(65536 - 50000) % 256;;  
+ 299   1                      TH0 = 0;                    //定时器高位，初值设为0 (65536-62500)/256
+ 300   1                      TL0 = 0;                    //定时器低位，初值设为0
+ 301   1                      ET0=0;  // 关闭定时中断
+ 302   1                      EA=1;   // 开启中断
+ 303   1                      TR0=0;  // 关闭定时器
+ 304   1      }
+ 305          
+ 306          
+ 307          /*******************************************************************************
+ 308          * 函 数 名         : main
+ 309          * 函数功能                 : 主函数
+ 310          * 输    入         : 无
+ 311          * 输    出         : 无
+ 312          *******************************************************************************/
+ 313          
+ 314          //code char  CWJAP_buff[35] = "AT+CWJAP=\"CMCC-z5x5\",\"MNtH5Rr7\"\r\n";  //链接WiFi 名称和密码
+ 315          //code char  CWMODE_buff[15] = "AT+CWMODE=1\r\n";  //设置WiFi模块为STA模式
+ 316          //code char  CIPSTART_buff[] = "AT+CIPSTART=\"TCP\",\"api.seniverse.com\",80\r\n";  //建立TCP连接
+ 317          //code char  GET_API_buff[]
+ 318          
+ 319          unsigned char api_cnt=0;
+ 320          unsigned char loop_cnt=0;
+ 321          
+ 322          
+ 323          
+ 324          void main(void)                         //主函数
+ 325          {
+ 326   1      //       unsigned char i;
+ 327   1      //      lcd12864_init();//LCD12864初始化
+ 328   1      //              sprintf((char*)str_buff,"set:%.0fcm   ",set_dis_down);
+ 329   1      //              lcd12864_show_string(0,0,str_buff);//第1行字符串显示 lie hang
+ 330   1              BEEP =1;
+ 331   1              LED =0;
+ 332   1              LcdInit();
+ 333   1              delayms(200); 
+ 334   1              init_time0();  //定时器0初始化
+ 335   1              init_usart_com(); //串口初始化 波特率9600
+ 336   1              BEEP=1;  LED=1; 
+ 337   1              
+ 338   1              //      dat_resive_fun();
+ 339   1              
+ 340   1              resvie_usart_dat_buff_len =0;
+ 341   1              Send_Str("AT\r\n");             //
+ 342   1              delayms(2000);
+ 343   1              while(strstr(resvie_usart_dat_buff,"OK")==0);
+ 344   1              memset(resvie_usart_dat_buff,0,500);
+ 345   1              
+ 346   1              resvie_usart_dat_buff_len =0;
+ 347   1              Send_Str("AT+CIPMUX=1\r\n");              //多链接模式
+ 348   1              delayms(2000);
+ 349   1              while(strstr(resvie_usart_dat_buff,"OK")==0);
+ 350   1              memset(resvie_usart_dat_buff,0,500);            
+ 351   1              delayms(1000);
+ 352   1      
+ 353   1              //delayms(30000);
+ 354   1              resvie_usart_dat_buff_len =0;
+ 355   1              Send_Str(CWJAP_buff);                     //链接WiFi
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 7   
+
+ 356   1              delayms(5000);
+ 357   1              while(strstr(resvie_usart_dat_buff,"OK")==0);
+ 358   1              memset(resvie_usart_dat_buff,0,500);
+ 359   1              delayms(2000);
+ 360   1              
+ 361   1              resvie_usart_dat_buff_len=0;
+ 362   1              Send_Str(CWMODE_buff);                // 设置为sta模式
+ 363   1              delayms(2000);
+ 364   1              while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 365   1              memset(resvie_usart_dat_buff,0,500); 
+ 366   1              delayms(1000);
+ 367   1              
+ 368   1              resvie_usart_dat_buff_len=0;
+ 369   1              Send_Str(CIPSTART_API_buff);    // 链接获取天气的服务器
+ 370   1              delayms(2000);
+ 371   1              while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 372   1              memset(resvie_usart_dat_buff,0,500); 
+ 373   1              delayms(1000);
+ 374   1      
+ 375   1              resvie_usart_dat_buff_len=0;
+ 376   1              Send_Str(CIPSEND_API_buff);    //发送数据指令 AT+CIPSEND = 
+ 377   1              delayms(2000);
+ 378   1              while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 379   1              memset(resvie_usart_dat_buff,0,500);
+ 380   1      
+ 381   1              resive_zero_flag =0;
+ 382   1              resvie_usart_dat_buff_len=0; 
+ 383   1              Send_Str(GET_API_buff);        //发API数据获取天气
+ 384   1              delayms(2000);
+ 385   1              while(strstr(resvie_usart_dat_buff,"date")==0);         
+ 386   1              delayms(1000);
+ 387   1              //      memset(resvie_usart_dat_buff,0,1000);
+ 388   1              //Send_Str("\r\n");  
+ 389   1              //Send_Str(resvie_usart_dat_buff);  
+ 390   1      
+ 391   1              //resvie_usart_dat_buff_len =300;
+ 392   1              //// 改为透传
+ 393   1              if(resvie_usart_dat_buff_len>100)
+ 394   1              {
+ 395   2                      dat_resive_fun();
+ 396   2                      // CIPSEND_buff         
+ 397   2                      memset(resvie_usart_dat_buff,0,500);
+ 398   2                      
+ 399   2                      resvie_usart_dat_buff_len =0; 
+ 400   2                      Send_Str("AT+CIPMUX=1\r\n");              //链接WiFi
+ 401   2                      delayms(2000);
+ 402   2                      while(strstr(resvie_usart_dat_buff,"OK")==0);
+ 403   2                      memset(resvie_usart_dat_buff,0,500);            
+ 404   2                      
+ 405   2                      resvie_usart_dat_buff_len=0;
+ 406   2                      Send_Str(CWMODE_buff);           // 设置为sta模式
+ 407   2                      delayms(2000);
+ 408   2                      while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 409   2                      memset(resvie_usart_dat_buff,0,500);
+ 410   2                      delayms(5000);  
+ 411   2              
+ 412   2      
+ 413   2                      resvie_usart_dat_buff_len=0; 
+ 414   2                      Send_Str(CIPSTART_APP_buff);   //链接手机app调试助手
+ 415   2                      delayms(2000);
+ 416   2                      while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 417   2                      memset(resvie_usart_dat_buff,0,500);            
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 8   
+
+ 418   2                      delayms(2000);          
+ 419   2              
+ 420   2                      //              sprintf(str_buff,"date:%s      ",date_buff);
+ 421   2                      //              sprintf(send_len_buff,"AT+CIPSEND=2,%d\r\n",(int)(strlen(str_buff)+2));
+ 422   2                      //    Send_Str(send_len_buff);  delayms(2000);
+ 423   2                      //    Send_Str(str_buff);
+ 424   2                      //        Send_Str("\r\n");     
+ 425   2                      //      
+ 426   2                      //      
+ 427   2                      //      resvie_usart_dat_buff_len=0;
+ 428   2                      //      Send_Str(CWMODE_buff);           // 设置为sta模式
+ 429   2                      //      delayms(2000);
+ 430   2                      //      while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 431   2                      //      memset(resvie_usart_dat_buff,0,500);
+ 432   2                      //              delayms(5000);  
+ 433   2                      //resvie_usart_dat_buff_len=0;
+ 434   2      
+ 435   2                      //      resvie_usart_dat_buff_len=0;
+ 436   2                      //      Send_Str(CIPSEND_buff);       //设置为透传
+ 437   2                      //      delayms(2000);
+ 438   2                      //      //if(strstr(resvie_usart_dat_buff,"OK")) break; 
+ 439   2                      //              while(strstr(resvie_usart_dat_buff,"OK")==0);   
+ 440   2                      //      memset(resvie_usart_dat_buff,0,500);                    
+ 441   2                      //      delayms(5000);
+ 442   2      
+ 443   2      
+ 444   2              }
+ 445   1      
+ 446   1                      //      LED_READ =0;
+ 447   1              delayms(200);
+ 448   1              while(1)
+ 449   1              {
+ 450   2      //              beek_flag =0;
+ 451   2                      sys_cnt++;
+ 452   2                      if(sys_cnt>=6)
+ 453   2                      {
+ 454   3                              sys_cnt =0;
+ 455   3                              if(MQ2_IN==0) { BEEP=0; LED=0; beek_flag=1; } //超过正常范围，LED亮并且蜂鸣器报警
+ 456   3                              else {  BEEP=1;  LED=1; beek_flag=0; }
+ 457   3                              DHT11_receive();        
+ 458   3                              LCD_display_str(0,rec_dat);     
+ 459   3                              
+ 460   3                              loop_cnt++;
+ 461   3                              if(loop_cnt>=6)
+ 462   3                              {
+ 463   4                                      loop_cnt=0;
+ 464   4                                      show_API(api_cnt);
+ 465   4                                      api_cnt++;if(api_cnt>6) api_cnt=0;
+ 466   4                                      send_API();
+ 467   4                              }
+ 468   3                              
+ 469   3          }
+ 470   2                                      delayms(200);
+ 471   2              }
+ 472   1      }
+ 473          
+ 474          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+ 475          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -/
+ 476          
+
+
+C51 COMPILER V9.60.0.0   MAIN                                                              04/11/2024 16:01:10 PAGE 9   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3335    ----
+   CONSTANT SIZE    =    679    ----
+   XDATA SIZE       =    500    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9       5
+   IDATA SIZE       =    192    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
